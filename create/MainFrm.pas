@@ -55,7 +55,7 @@ end;
 
 procedure TMainForm.GenerateBGR(const AOutStream: TStream);
 var
-  pCompressor: TCompressedBlockWriter;
+  pCompressor: TMemoryStream;
   pFile: TFileStream;
   pData: TStringStream;
   iLen: integer;
@@ -69,32 +69,27 @@ begin
     iLen := length(memData.Text);
     WriteBuffer(iLen, sizeof(iLen));
     WriteBuffer(memData.Text[1], iLen);
-    pCompressor := TCompressedBlockWriter.Create(AOutStream, TLZMACompressor, clLZMAUltra, nil);
+    pData := TStringStream.Create('');
     try
-      pData := TStringStream.Create('');
+      pFile := TFileStream.Create(edtPatch.Text, fmOpenRead);
       try
-        pFile := TFileStream.Create(edtPatch.Text, fmOpenRead);
-        try
-          pFile.Position := pFile.Position + 67;
-          iLen := pFile.Size - pFile.Position;
-          pData.CopyFrom(pFile, iLen);
-        finally
-          pFile.Free;
-        end;
-        strMagic := StringReplace(pData.DataString, #13#10, #10, [rfReplaceAll]);
+        pFile.Position := pFile.Position + 67;
+        iLen := pFile.Size - pFile.Position;
+        pData.CopyFrom(pFile, iLen);
       finally
-        pData.Free;
+        pFile.Free;
       end;
-      pData := TStringStream.Create(strMagic);
-      try
-        iLen := pData.Size;
-        WriteBuffer(iLen, sizeof(iLen));
-        pCompressor.CopyFrom(pData, 0);
-      finally
-        pData.Free;
-      end;
+      strMagic := StringReplace(pData.DataString, #13#10, #10, [rfReplaceAll]);
     finally
-      pCompressor.Free;
+      pData.Free;
+    end;
+    pData := TStringStream.Create(strMagic);
+    try
+      iLen := pData.Size;
+      WriteBuffer(iLen, sizeof(iLen));
+      CopyFrom(pData, 0);
+    finally
+      pData.Free;
     end;
     strMagic := 'BDGR' + chr(FORMAT_VERSION);
     WriteBuffer(strMagic[1], length(strMagic));
