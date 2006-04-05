@@ -3,7 +3,7 @@ unit Tokeniser;
 interface
 
 uses
-  Classes;
+  Classe;
 
 type
   TTokenList = class(TStringList)
