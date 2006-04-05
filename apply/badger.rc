@@ -1,0 +1,2 @@
+badger BITMAP ..\lib\logo.bmp
+MAINICON icon ..\lib\icon.ico
