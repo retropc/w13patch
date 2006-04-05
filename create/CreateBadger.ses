@@ -1,0 +1,28 @@
+[TMemo]
+memFiles 0=2
+memFiles 1=CreateBadger.exe
+memFiles 2=LZMA.dll
+
+[TLabeledEdit]
+edtRootDirectory=.\
+edtCaption=
+edtExtractHere=
+edtExecutable=CreateBadger.exe
+edtParams=
+edtUNC=
+edtPassword=
+edtHashProtection=
+
+[TTrackBar]
+tbCompressionLevel=4
+
+[TRadioGroup]
+rgCompressionType=2
+rgCipher=1
+
+[TEdit]
+edtP=P
+edtQ=Q
+edtG=G
+edtY=Y
+
