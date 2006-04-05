@@ -139,13 +139,11 @@ c:\program files\borland\delphi7\Projects\Bpl\dclusr70.bpl=Borland User Componen
 c:\program files\borland\delphi7\Projects\Bpl\SudokuComponents.bpl=Sudoku components
 c:\program files\borland\delphi7\Projects\Bpl\BB2B.bpl=(untitled)
 [HistoryLists\hlDebugSourcePath]
-Count=2
-Item0=..\Lib;..\Lib\LZMA
-Item1=..\Lib\LZMA
+Count=1
+Item0=..\Lib
 [HistoryLists\hlUnitAliases]
 Count=1
 Item0=WinTypes=Windows;WinProcs=Windows;DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE;
 [HistoryLists\hlSearchPath]
-Count=2
-Item0=..\Lib;..\Lib\LZMA
-Item1=..\Lib\LZMA
+Count=1
+Item0=..\Lib

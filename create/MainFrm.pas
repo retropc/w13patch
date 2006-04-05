@@ -21,7 +21,6 @@ type
     procedure btnBrowseClick(Sender: TObject);
     procedure edtPatchChange(Sender: TObject);
     procedure btnSaveClick(Sender: TObject);
-    procedure FormCreate(Sender: TObject);
     procedure btnLoadTextClick(Sender: TObject);
   private
     FPatch: string;
@@ -36,9 +35,6 @@ implementation
 
 {$R *.dfm}
 
-uses
-  Compress, LZMA;
-  
 procedure TMainForm.btnBrowseClick(Sender: TObject);
 begin
   if OpenDialog.Execute then
@@ -119,14 +115,6 @@ begin
   finally
     pStream.Free;
   end;
-end;
-
-procedure TMainForm.FormCreate(Sender: TObject);
-begin
-  FModule := LoadLibrary('lzma.dll');
-  if FModule = 0 then
-    raise Exception.Create('Unable to load LZMA');
-  LZMAInitCompressFunctions(FModule);
 end;
 
 procedure TMainForm.btnLoadTextClick(Sender: TObject);
