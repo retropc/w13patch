@@ -3,7 +3,7 @@ unit PatchEngine;
 interface
 
 uses
-  SysUtils, Classes, Tokeniser, Windows;
+  Kol, SysUtils, Classes, Tokeniser, Windows, Common;
   
 type
   THunkFile = packed record
@@ -18,27 +18,30 @@ type
     NewValue: char;
   end;
 
-  TPatch = class(TPersistent)
+  TPatch = class
   private
-  public
     Files: array of THunkFile;
     Hunks: array of THunk;
-    constructor Create(const APatchFile: TStream);
-    destructor Destroy; override;
+  public
+    procedure LoadOldFormat(const APatchFile: TStream);
+    procedure LoadFormat(const APatchFile: TStream);
+    procedure SaveToStream(const APatchFile: TStream);
   end;
 
-  TLocateEvent = procedure(const AFile: string; var ANewPath: string; out AContinue: boolean) of object;
+  TLocateEvent = procedure(const AFile: string; out ANewPath: string; out AContinue: boolean) of object;
 
   TPatchEngine = class
   private
     FOnCantLocateFile: TLocateEvent;
-  public
     FPatch: TPatch;
     procedure PatchEngine(const AList: TList; const AUndo: boolean; const ALastHunk: PInteger; const ALimit: integer = -1);
-    constructor Create(const APatchFile: TStream);
+    function SelectDirectory(const AFilename: string; var AOutput: string): boolean;
+  public
+    constructor Create(const APatch: TPatch);
     destructor Destroy; override;
     property OnCantLocateFile: TLocateEvent read FOnCantLocateFile write FOnCantLocateFile;
-    procedure Patch(const ADirectory: string; const AUndo: boolean = false);
+    function Patch(var ADirectory: string; const AUndo: boolean = false): string;
+    property PatchFile: TPatch read FPatch write FPatch;
   end;
 
 implementation
@@ -60,22 +63,191 @@ end;
 
 { TPatchEngine }
 
-constructor TPatchEngine.Create(const APatchFile: TStream);
+constructor TPatchEngine.Create(const APatch: TPatch);
 begin
-  FPatch := TPatch.Create(APatchFile);
+  FPatch := APatch; 
 end;
 
 destructor TPatchEngine.Destroy;
 begin
-  FPatch.Free;
-  
   inherited;
 end;
 
-procedure TPatchEngine.Patch(const ADirectory: string;
-  const AUndo: boolean);
+function TPatchEngine.Patch(var ADirectory: string; const AUndo: boolean): string;
+function IsFilename(const AData: string): boolean;
 begin
+  Result := Copy(ADAta, 9, 1) <> ':';
+end;
+function IsValidFilename(const AData: string): boolean;
+begin
+  Result := Pos('../', AData) = 0;
+end;
+function CountString(const AData: string; const AWhat: char): integer;
+var
+  iCount: integer;
+begin
+  Result := 0;
+  for iCount := 0 to length(AData) - 1 do
+    if AData[iCount] = AWhat then
+      inc(Result);
+end;
+var
+  strDirectory: string;
+  pFiles: TList;
+  iFound: integer;
+  iCount: integer;
+  pFile: TFileStream;
+  cByte: char;
+  fFirst: boolean;
+  fMatch: boolean;
+  fAllFileMatch: boolean;
+  fAllNil: boolean;
+  strFile: string;
+  iHunk: integer;
+  strComment: string;
+  iCount2: integer;
+  iLastHunk: integer;
+begin
+  Result := '';
+  strFile := '';
+  fAllNil := true;
+  iHunk := 0;
+  pFile := nil;
+  fMatch := false;
+  fAllFileMatch := false;
 
+  strDirectory := ADirectory;
+  try
+    pFiles := TList.Create;
+    try
+      for iCount := 0 to length(FPatch.Files) - 1 do
+      begin
+        //if its not the same file as last time, different hunk
+        if FPatch.Files[iCount].Filename <> strFile then
+        begin
+          strFile := FPatch.Files[iCount].Filename;
+          if not FileExists(strDirectory + strFile) then
+            if iCount = 0 then
+            begin
+
+              if not SelectDirectory(ExtractFileName(strFile), strDirectory) then
+                raise ECancelled.Create('');
+              strDirectory := IncludeTrailingPathDelimiter(strDirectory);
+              if not FileExists(strDirectory + ExtractFilename(strFile)) then
+                raise Exception.Create('Unable to locate file to patch!');
+              iFound := CountString(strFile, '\') - 1;
+              while iFound > 0 do
+              begin
+                strDirectory := strDirectory + '..\';
+                dec(iFound);
+              end;
+            end
+            else
+              raise Exception.Create('File missing!');
+
+          if fMatch and fAllFileMatch then
+          begin
+            pFile := pFiles[pFiles.Count - 1];
+            for iCount2 := 0 to pFiles.Count -  1do
+              if pFiles[iCount2] = pFile then
+                pFiles[iCount2] := nil;
+
+            pFile.Free;
+          end;
+          fAllFileMatch := true;
+
+          pFile := TFileStream.Create(strDirectory + strFile, fmOpenReadWrite or fmShareExclusive);
+          try
+            pFiles.Add(pFile);
+          except
+            pFile.Free;
+            raise;
+          end;
+
+        end
+        else // same file
+          pFiles.Add(pFile);
+
+        strComment := FPatch.Files[iCount].Comment;
+        if FPatch.Files[iCount].Comment = '' then
+          strComment := ExtractFilename(strFile);
+
+        // try applying the patch
+        fFirst := true;
+        fMatch := false;
+        while (iHunk < length(FPatch.Hunks)) and (FPatch.Hunks[iHunk].FileIndex = iCount) do
+        begin
+          with FPatch.Hunks[iHunk] do
+          begin
+            pFile.Position := Offset;
+            pFile.ReadBuffer(cByte, 1);
+            if cByte <> LookupOrigValue(FPatch.Hunks[iHunk], AUndo) then
+            begin
+              if fFirst then
+              begin
+                fMatch := true;
+
+                if Result = '' then
+                  Result := strComment
+                else
+                  Result := Result + ', ' + strComment;
+              end
+              else
+              begin
+                if not fMatch then
+                  raise Exception.Create('File does not match patch!');
+              end;
+            end
+            else if fMatch then
+              raise Exception.Create('File does not match patch!');
+          end;
+          inc(iHunk);
+          fFirst := false;
+        end;
+        if not fMatch then
+        begin
+          fAllNil := false;
+          fAllFileMatch := false;
+        end;
+      end;
+
+      if fMatch and fAllFileMatch then
+      begin
+        for iCount2 := 0 to pFiles.Count -  1do
+          if pFiles[iCount2] = pFile then
+            pFiles[iCount2] := nil;
+
+        pFile.Free;
+      end;
+
+      if fAllNil then
+        raise EPatchApplied.Create('Patch has already been applied.');
+
+      // ok, it checked out, so lets patch!
+      iLastHunk := 0;
+
+      try
+        PatchEngine(pFiles, AUndo, @iLastHunk);
+      except
+        PatchEngine(pFiles, not AUndo, nil, iLastHunk);
+        raise;
+      end;
+
+      ADirectory := strDirectory;
+    finally
+      pFile := nil;
+      while pFiles.Count > 0 do
+      begin
+        if Assigned(pFiles[0]) and (pFiles[0] <> pFile) then
+          TFileStream(pFiles[0]).Free;
+        pFile := pFiles[0];
+        pFiles.Delete(0);
+      end;
+      pFiles.Free;
+    end;
+  except
+    raise;
+  end;
 end;
 
 procedure TPatchEngine.PatchEngine(const AList: TList;
@@ -115,9 +287,18 @@ begin
   end;
 end;
 
+function TPatchEngine.SelectDirectory(const AFilename: string;
+  var AOutput: string): boolean;
+begin
+  Result := false;
+  if not Assigned(OnCantLocateFile) then
+    exit;
+  OnCantLocateFile(AFilename, AOutput, Result);
+end;
+
 { TPatch }
 
-constructor TPatch.Create(const APatchFile: TStream);
+procedure TPatch.LoadOldFormat(const APatchFile: TStream);
 function IsFilename(const AData: string): boolean;
 begin
   Result := Copy(ADAta, 9, 1) <> ':';
@@ -199,10 +380,105 @@ begin
     raise Exception.Create('Unknown patch format.');
 end;
 
-destructor TPatch.Destroy;
+procedure TPatch.LoadFormat(const APatchFile: TStream);
+var
+  iLength: integer;
+  iFile: integer;
+  iHunk: integer;
+  iHunkCount: integer;
+  iCount: integer;
+  iCount2: integer;
 begin
-  // not required
-  inherited;
+  iFile := 0;
+  iHunk := 0;
+
+  with APatchFile do
+  begin
+    ReadBuffer(iLength, sizeof(integer));
+    setlength(Files, iLength);
+    ReadBuffer(iLength, sizeof(integer));
+    setlength(Hunks, iLength);
+    for iCount := 1 to length(Files) do
+    begin
+      ReadBuffer(iLength, sizeof(iLength));
+      setlength(Files[iFile].Filename, iLength);
+      ReadBuffer(Files[iFile].Filename[1], iLength);
+
+      ReadBuffer(iLength, sizeof(iLength));
+      setlength(Files[iFile].Comment, iLength);
+      ReadBuffer(Files[iFile].Comment[1], iLength);
+
+      ReadBuffer(iHunkCount, sizeof(iHunkCount));
+      for iCount2 := 1 to iHunkCount do
+      begin
+        with Hunks[iHunk] do
+        begin
+          ReadBuffer(Offset, sizeof(Offset));
+          ReadBuffer(OldValue, sizeof(OldValue));
+          ReadBuffer(NewValue, sizeof(NewValue));
+        end;
+        inc(iHunk);
+      end;
+    end;
+  end;
+end;
+
+procedure TPatch.SaveToStream(const APatchFile: TStream);
+var
+  iHunk: integer;
+  iFile: integer;
+  iLength: integer;
+  iMarker: integer;
+  iMarker2: integer;
+  iHunkCount: integer;
+begin
+  with APatchFile do
+  begin
+    iLength := length(Files);
+    WriteBuffer(iLength, sizeof(integer));
+    iLength := length(Hunks);
+    WriteBuffer(iLength, sizeof(integer));
+
+    iFile := -1;
+    iMarker := 0;
+
+    for iHunk := 0 to length(Hunks) - 1 do
+    begin
+      with Hunks[iHunk] do
+      begin
+        if FileIndex <> iFile then
+        begin
+          if iFile <> -1 then
+          begin
+            iMarker2 := APatchFile.Position;
+            Position := iMarker;
+            WriteBuffer(iHunkCount, sizeof(iHunkCount));
+            Position := iMarker2;
+          end;
+          inc(iFile);
+          iLength := length(Files[iFile].Filename);
+          WriteBuffer(iLength, sizeof(iLength));
+          WriteBuffer(Files[iFile].Filename[1], iLength);
+          iLength := length(Files[iFile].Comment);
+          WriteBuffer(iLength, sizeof(iLength));
+          WriteBuffer(Files[iFile].Comment[1], iLength);
+          iMarker := APatchFile.Position;
+          iHunkCount := 0;
+          APatchFile.WriteBuffer(iHunkCount, sizeof(iHunkCount));
+        end;
+        WriteBuffer(Offset, sizeof(Offset));
+        WriteBuffer(OldValue, sizeof(OldValue));
+        WriteBuffer(NewValue, sizeof(NewValue));
+      end;
+    end;
+    if iFile <> -1 then
+    begin
+      iMarker2 := APatchFile.Position;
+      Position := iMarker;
+      WriteBuffer(iHunkCount, sizeof(iHunkCount));
+      Position := iMarker2;
+    end;
+  end;
 end;
 
 end.
