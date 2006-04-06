@@ -199,7 +199,7 @@ begin
               end;
             end
             else if fMatch then
-              raise Exception.Create('File does not match patch!');
+               raise Exception.Create('File does not match patch!');
           end;
           inc(iHunk);
           fFirst := false;
@@ -340,7 +340,7 @@ begin
         begin
           with Files[iFileCount] do
           begin
-            iSep := Pos(strLine, '/');
+            iSep := Pos('/', strLine);
             if iSep = 0 then
             begin
               Filename := strLine;
@@ -349,7 +349,7 @@ begin
             else
             begin
               Filename := Copy(strLine, 0, iSep - 1);
-              Comment := Copy(strLine, iSep, length(strLine));
+              Comment := Copy(strLine, iSep + 1, length(strLine));
             end;
             if Filename[1] = '\' then
               Filename := Copy(Filename, 1, length(Filename));
@@ -387,9 +387,7 @@ var
   iHunk: integer;
   iHunkCount: integer;
   iCount: integer;
-  iCount2: integer;
 begin
-  iFile := 0;
   iHunk := 0;
 
   with APatchFile do
@@ -398,7 +396,7 @@ begin
     setlength(Files, iLength);
     ReadBuffer(iLength, sizeof(integer));
     setlength(Hunks, iLength);
-    for iCount := 1 to length(Files) do
+    for iFile := 0 to length(Files) - 1 do
     begin
       ReadBuffer(iLength, sizeof(iLength));
       setlength(Files[iFile].Filename, iLength);
@@ -409,13 +407,14 @@ begin
       ReadBuffer(Files[iFile].Comment[1], iLength);
 
       ReadBuffer(iHunkCount, sizeof(iHunkCount));
-      for iCount2 := 1 to iHunkCount do
+      for iCount := 1 to iHunkCount do
       begin
         with Hunks[iHunk] do
         begin
           ReadBuffer(Offset, sizeof(Offset));
           ReadBuffer(OldValue, sizeof(OldValue));
           ReadBuffer(NewValue, sizeof(NewValue));
+          FileIndex := iFile;
         end;
         inc(iHunk);
       end;
@@ -450,7 +449,7 @@ begin
         begin
           if iFile <> -1 then
           begin
-            iMarker2 := APatchFile.Position;
+            iMarker2 := Position;
             Position := iMarker;
             WriteBuffer(iHunkCount, sizeof(iHunkCount));
             Position := iMarker2;
@@ -469,6 +468,7 @@ begin
         WriteBuffer(Offset, sizeof(Offset));
         WriteBuffer(OldValue, sizeof(OldValue));
         WriteBuffer(NewValue, sizeof(NewValue));
+        inc(iHunkCount);
       end;
     end;
     if iFile <> -1 then
