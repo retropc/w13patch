@@ -84,7 +84,7 @@ begin
         try
           (pTemp as TStream).CopyFrom(pFile, iLen);
           (pTemp as TStream).Position := 0;
-          pPatch.LoadOldFormat(pTemp);
+          pPatch.LoadFormat(pTemp);
         finally
           pTemp.Free;
         end;
@@ -138,7 +138,7 @@ begin
       end;
     end;
     if strExtra <> '' then
-      strExtra := CRLF + CRLF + 'Following files were already patched:' + CRLF + strExtra;
+      strExtra := CRLF + CRLF + 'Following features already patched:' + CRLF + strExtra;
     MessageB('Patch complete!' + strExtra, MB_ICONINFORMATION);
   finally
     pEngine.Free;

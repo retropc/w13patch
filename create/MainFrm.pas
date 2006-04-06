@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, StdCtrls, ExtCtrls, FormatVersion;
+  Dialogs, StdCtrls, ExtCtrls, FormatVersion, PatchEngine;
 
 type
   TMainForm = class(TForm)
@@ -24,7 +24,6 @@ type
     procedure btnLoadTextClick(Sender: TObject);
   private
     FPatch: string;
-    FModule: integer;
     procedure GenerateBGR(const AOutStream: TStream);
   end;
 
@@ -51,11 +50,13 @@ end;
 
 procedure TMainForm.GenerateBGR(const AOutStream: TStream);
 var
-  pCompressor: TMemoryStream;
   pFile: TFileStream;
   pData: TStringStream;
   iLen: integer;
   strMagic: string;
+  strPatch: string;
+  pPatch: TPatch;
+  pMemStream: TMemoryStream;
 begin
   with AOutStream do
   begin
@@ -75,17 +76,29 @@ begin
       finally
         pFile.Free;
       end;
-      strMagic := StringReplace(pData.DataString, #13#10, #10, [rfReplaceAll]);
+      strPatch := StringReplace(pData.DataString, #13#10, #10, [rfReplaceAll]);
     finally
       pData.Free;
     end;
-    pData := TStringStream.Create(strMagic);
+    pMemStream := TMemoryStream.Create;
     try
-      iLen := pData.Size;
+      pPatch := TPatch.Create;
+      try
+        pData := TStringStream.Create(strPatch);
+        try
+          pPatch.LoadOldFormat(pData);
+        finally
+          pData.Free;
+        end;
+        pPatch.SaveToStream(pMemStream);
+      finally
+        pPatch.Free;
+      end;
+      iLen := pMemStream.Size;
       WriteBuffer(iLen, sizeof(iLen));
-      CopyFrom(pData, 0);
+      CopyFrom(pMemStream, 0);
     finally
-      pData.Free;
+      pMemStream.Free;
     end;
     strMagic := 'BDGR' + chr(FORMAT_VERSION);
     WriteBuffer(strMagic[1], length(strMagic));
