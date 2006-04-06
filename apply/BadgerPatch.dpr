@@ -6,11 +6,16 @@ uses
   Kol, Windows, Tokeniser, FormatVersion, Classes, FileCtrl2, SysUtils;
 
 type
+  EPatchApplied = class(Exception);
   TDummy = class
     class procedure btnClick(Sender: PObj);
     class procedure frmResize(Sender: PObj);
     class procedure OnShow(Sender: PObj);
   end;
+const
+  CR = #13;
+  LF = #10;
+  CRLF = CR + LF;
 
 var
   pForm: PControl;
@@ -89,7 +94,7 @@ begin
     FCompressed.Free;
 end;
 
-procedure Patch(const AData: TTokenList; const AUndo: boolean; var AStartDirectory: string);
+function Patch(const AData: TTokenList; const AUndo: boolean; var AStartDirectory: string): string;
 function IsFilename(const AData: string): boolean;
 begin
   Result := Copy(ADAta, 9, 1) <> ':';
@@ -117,7 +122,19 @@ var
   iFindPos: integer;
   iRepPos: integer;
   cByte: char;
+  iValue: integer;
+  fFirst: boolean;
+  fMatch: boolean;
+  strFilename: string;
+  iAt: integer;
+  fAllNil: boolean;
 begin
+  fFirst := true;
+  fMatch := false;
+  Result := '';
+  strFilename := '';
+  fAllNil := true;
+
   if AUndo then
   begin
     iFindPos := 14;
@@ -137,53 +154,101 @@ begin
       begin
         if IsFilename(AData[iCount]) then
         begin
-          if AData[iCount][1] = '\' then
-            AData[iCount] := Copy(AData[iCount], 1, length(AData[iCount]));
-          if not IsValidFilename(AData[iCount]) then
-            raise Exception.Create('Patch contains invalid filenames!');
-          if not FileExists(strDirectory + AData[iCount]) then
-            if iCount = 0 then
+          if AData[iCount] <> strFilename then
+          begin
+            if fMatch then
             begin
-              if not SelectDirectory(pForm.Handle, 'Select directory that contains: ' + ExtractFileName(AData[iCount]), '', strDirectory) then
-                raise Exception.Create('Unable to locate file to patch!');
-              strDirectory := IncludeTrailingPathDelimiter(strDirectory);
-              if not FileExists(strDirectory + ExtractFilename(AData[iCount])) then
-                raise Exception.Create('Unable to locate file to patch!');
-              iFound := CountString(AData[iCount], '\') - 1;
-              while iFound > 0 do
-              begin
-                strDirectory := strDirectory + '..\';
-                dec(iFound);
-              end;
+              TFileStream(pFiles[pFiles.Count - 1]).Free;
+              pFiles[pFiles.Count - 1] := nil;
             end;
-          pFile := TFileStream.Create(strDirectory + AData[iCount], fmOpenReadWrite or fmShareExclusive);
-          try
-            pFiles.Add(pFile);
-          except
-            pFile.Free;
-            raise;
+            strFilename := ExtractFileName(AData[iCount]);
+            if AData[iCount][1] = '\' then
+              AData[iCount] := Copy(AData[iCount], 1, length(AData[iCount]));
+            if not IsValidFilename(AData[iCount]) then
+              raise Exception.Create('Patch contains invalid filenames!');
+            if not FileExists(strDirectory + AData[iCount]) then
+              if iCount = 0 then
+              begin
+                if not SelectDirectory(pForm.Handle, 'Select directory that contains: ' + ExtractFileName(strFilename), '', strDirectory) then
+                  raise Exception.Create('Unable to locate file to patch!');
+                strDirectory := IncludeTrailingPathDelimiter(strDirectory);
+                if not FileExists(strDirectory + ExtractFilename(AData[iCount])) then
+                  raise Exception.Create('Unable to locate file to patch!');
+                iFound := CountString(AData[iCount], '\') - 1;
+                while iFound > 0 do
+                begin
+                  strDirectory := strDirectory + '..\';
+                  dec(iFound);
+                end;
+              end;
+            pFile := TFileStream.Create(strDirectory + AData[iCount], fmOpenReadWrite or fmShareExclusive);
+            try
+              pFiles.Add(pFile);
+            except
+              pFile.Free;
+              raise;
+            end;
           end;
+          fFirst := true;
+          fMatch := false;
         end
         else
         begin
           iLocation := StrToInt('$' + Copy(AData[iCount], 0, 8));
           pFile.Position := iLocation;
           pFile.ReadBuffer(cByte, 1);
-          if StrToInt('$' + Copy(AData[iCount], iFindPos, 2)) <> ord(cByte) then
-             raise Exception.Create('File does not match patch!');
+          iValue := StrToInt('$' + Copy(AData[iCount], iFindPos, 2));
+          if iValue <> ord(cByte) then
+          begin
+            if not fFirst then
+            begin
+              if not fMatch then
+                raise Exception.Create('File does not match patch!');
+            end
+            else
+            begin
+              fMatch := true;
+              if Result = '' then
+                Result := strFilename
+              else
+                Result := Result + ', ' + strFilename;
+            end
+          end
+          else
+            if fMatch then
+              raise Exception.Create('File does not match patch!');        
+          fFirst := false;
         end;
       end;
+
+      if fMatch then
+      begin
+        TFileStream(pFiles[pFiles.Count - 1]).Free;
+        pFiles[pFiles.Count - 1] := nil;
+      end;
+
       iFound := 0;
       try
+        strFilename := '';
+        iAt := -1;
+
         for iCount := 0 to AData.Count - 1 do
         begin
+          inc(iFound);
           if IsFilename(AData[iCount]) then
           begin
-            pFile := TFileStream(pFiles[iFound]);
-            inc(iFound);
+            if strFilename <> AData[iCount] then
+              inc(iAt);
+
+            pFile := TFileStream(pFiles[iAt]);
+            strFilename := AData[iCount];
           end
           else
           begin
+            if not Assigned(pFile) then
+              continue;
+
+            fAllNil := false;
             iLocation := StrToInt('$' + Copy(AData[iCount], 0, 8));
             pFile.Position := iLocation;
             cByte := chr(StrToInt('$' + Copy(AData[iCount], iRepPos, 2)));
@@ -193,17 +258,24 @@ begin
       except
         if iFound > 0 then
         begin
-          iFound := 0;
-          for iCount := 0 to AData.Count - 1 do
+          iAt := -1;
+          strFilename := '';
+
+          for iCount := 0 to iFound do
             if IsFilename(AData[iCount]) then
             begin
-              pFile := TFileStream(pFiles[iFound]);
-              inc(iFound);
+              if strFilename <> AData[iCount] then
+                inc(iAt);
+
+              pFile := TFileStream(pFiles[iAt]);
+              strFilename := AData[iCount];
             end
             else
             begin
+              if not Assigned(pFile) then
+                continue;
               iLocation := StrToInt('$' + Copy(AData[iCount], 0, 8));
-              pFile.Position := iLocation - 1;
+              pFile.Position := iLocation;
               cByte := chr(StrToInt('$' + Copy(AData[iCount], iFindPos, 2)));
               pFile.WriteBuffer(cByte, 1);
             end;
@@ -222,11 +294,14 @@ begin
   except
     raise;
   end;
+  if fAllNil then
+    raise EPatchApplied.Create('Patch has already been applied.');
 end;
 
 class procedure TDummy.btnClick(Sender: PObj);
 var
   pTokens: TTokenList;
+  strExtra: string;
 begin
   if FCompressed is TStringStream then
   begin
@@ -247,8 +322,16 @@ begin
   if FCompressed is TTokenList then
   begin
     try
-      Patch(FCompressed as TTokenList, cbxUndo.Checked, FLocation);
+      strExtra := Patch(FCompressed as TTokenList, cbxUndo.Checked, FLocation);
     except
+      on E: EPatchApplied do
+      begin
+        if cbxUndo.Checked then
+          MessageB('Patch has not been applied.', MB_ICONWARNING)
+        else
+          MessageB(E.Message, MB_ICONINFORMATION);
+        exit;
+      end;
       on E: Exception do
       begin
         FLocation := IncludeTrailingPathDelimiter(ExtractFileDir(ParamStr(0)));
@@ -256,7 +339,9 @@ begin
         exit;
       end;
     end;
-    MessageB('Patch complete!', MB_ICONINFORMATION);
+    if strExtra <> '' then
+      strExtra := CRLF + CRLF + 'Following files were already patched:' + CRLF + strExtra;
+    MessageB('Patch complete!' + strExtra, MB_ICONINFORMATION);
   end;
 end;
 
@@ -327,7 +412,7 @@ begin
     Height := 152;
   end;
 
-  memText := NewEditbox(pForm, [eoMultiline, eoReadOnly]);
+  memText := NewEditbox(pForm, [eoMultiline, eoReadOnly, eoNoHScroll]);
   SetFont(memText);
   with memText^ do
   begin

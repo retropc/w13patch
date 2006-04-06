@@ -100,7 +100,7 @@ Conditionals=
 DebugSourceDirs=..\Lib
 UsePackages=0
 [Parameters]
-RunParams="C:\Documents and Settings\Chris\Desktop\m2test.exe"
+RunParams="C:\Documents and Settings\Chris\Desktop\mech2xpv2.exe"
 HostApplication=
 Launcher=
 UseLauncher=0
