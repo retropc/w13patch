@@ -21,23 +21,42 @@ type
   TPatch = class(TPersistent)
   private
   public
-    FFiles: array of THunkFile;
-    FFileCount: integer;
-    FHunks: array of THunk;
-    FHunkCount: integer;
+    Files: array of THunkFile;
+    Hunks: array of THunk;
     constructor Create(const APatchFile: TStream);
     destructor Destroy; override;
   end;
+
+  TLocateEvent = procedure(const AFile: string; var ANewPath: string; out AContinue: boolean) of object;
 
   TPatchEngine = class
   private
+    FOnCantLocateFile: TLocateEvent;
   public
     FPatch: TPatch;
+    procedure PatchEngine(const AList: TList; const AUndo: boolean; const ALastHunk: PInteger; const ALimit: integer = -1);
     constructor Create(const APatchFile: TStream);
     destructor Destroy; override;
+    property OnCantLocateFile: TLocateEvent read FOnCantLocateFile write FOnCantLocateFile;
+    procedure Patch(const ADirectory: string; const AUndo: boolean = false);
   end;
 
 implementation
+
+function LookupOrigValue(const AHunk: THunk; const AUndo: boolean): char;
+begin
+  if AUndo then
+    Result := AHunk.NewValue
+  else
+    Result := AHunk.OldValue;
+end;
+function LookupNewValue(const AHunk: THunk; const AUndo: boolean): char;
+begin
+  if not AUndo then
+    Result := AHunk.NewValue
+  else
+    Result := AHunk.OldValue;
+end;
 
 { TPatchEngine }
 
@@ -51,6 +70,49 @@ begin
   FPatch.Free;
   
   inherited;
+end;
+
+procedure TPatchEngine.Patch(const ADirectory: string;
+  const AUndo: boolean);
+begin
+
+end;
+
+procedure TPatchEngine.PatchEngine(const AList: TList;
+  const AUndo: boolean; const ALastHunk: PInteger; const ALimit: integer = -1);
+var
+  iHunk: integer;
+  iLimit: integer;
+  iLastFile: integer;
+  pFile: TFileStream;
+  cByte: char;
+begin
+  pFile := nil;
+
+  iLimit := ALimit;
+  if iLimit = -1 then
+    iLimit := length(FPatch.Hunks) - 1;
+
+  iLastFile := -1;
+  for iHunk := 0 to iLimit do
+  begin
+    if Assigned(ALastHunk) then
+      ALastHunk^ := iHunk;
+    with FPatch.Hunks[iHunk] do
+    begin
+      if FileIndex <> iLastFile then
+      begin
+        inc(iLastFile);
+        pFile := AList[iLastFile];
+      end;
+      if not Assigned(pFile) then
+        continue;
+
+      pFile.Position := Offset;
+      cByte := LookupNewValue(FPatch.Hunks[iHunk], AUndo);
+      pFile.WriteBuffer(cByte, 1);
+    end;
+  end;
 end;
 
 { TPatch }
@@ -78,20 +140,24 @@ var
   strLine: string;
   iCount: integer;
   iSep: integer;
+  iHunkCount: integer;
+  iFileCount: integer;
 begin
+  iHunkCount := 0;
+  iFileCount := 0;
   if APatchFile is TStringStream then
   begin
     pTokens := TTokenList.Create;
     try
       pTokens.Tokenise(TStringStream(APatchFile).DataString, #10);
-      setlength(FFiles, pTokens.Count);
-      setlength(FHunks, pTokens.Count);
+      setlength(Files, pTokens.Count);
+      setlength(Hunks, pTokens.Count);
       for iCount := 0 to pTokens.Count - 1 do
       begin
         strLine := pTokens[iCount];
         if IsFilename(strLine) then
         begin
-          with FFiles[FFileCount] do
+          with Files[iFileCount] do
           begin
             iSep := Pos(strLine, '/');
             if iSep = 0 then
@@ -109,22 +175,22 @@ begin
             if not IsValidFilename(Filename) then
               raise Exception.Create('Patch contains invalid filenames!');
           end;
-          inc(FFileCount);
+          inc(iFileCount);
         end
         else
         begin
-          with FHunks[FHunkCount] do
+          with Hunks[iHunkCount] do
           begin
-            FileIndex := FFileCount - 1;
+            FileIndex := iFileCount - 1;
             Offset := StrToInt('$' + Copy(strLine, 0, 8));
             OldValue := chr(StrToInt('$' + Copy(strLine, 11, 2)));
             NewValue := chr(StrToInt('$' + Copy(strLine, 14, 2)));
           end;
-          inc(FHunkCount);   
+          inc(iHunkCount);   
         end;
       end;
-      setlength(FFiles, FFileCount);
-      setlength(FHunks, FHunkCount);
+      setlength(Files, iFileCount);
+      setlength(Hunks, iHunkCount);
     finally
       pTokens.Free;
     end;
