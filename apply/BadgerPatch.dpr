@@ -147,7 +147,6 @@ var
   fAllNil: boolean;
   strFile: string;
   iHunk: integer;
-  iLastFile: integer;
   strComment: string;
   iCount2: integer;
   iLastHunk: integer;
@@ -164,12 +163,12 @@ begin
   try
     pFiles := TList.Create;
     try
-      for iCount := 0 to pEngine.FPatch.FFileCount - 1 do
+      for iCount := 0 to length(pEngine.FPatch.Files) - 1 do
       begin
         //if its not the same file as last time, different hunk
-        if pEngine.FPatch.FFiles[iCount].Filename <> strFile then
+        if pEngine.FPatch.Files[iCount].Filename <> strFile then
         begin
-          strFile := pEngine.FPatch.FFiles[iCount].Filename;
+          strFile := pEngine.FPatch.Files[iCount].Filename;
           if not FileExists(strDirectory + strFile) then
             if iCount = 0 then
             begin
@@ -211,20 +210,20 @@ begin
         else // same file
           pFiles.Add(pFile);
 
-        strComment := pEngine.FPatch.FFiles[iCount].Comment;
-        if pEngine.FPatch.FFiles[iCount].Comment = '' then
+        strComment := pEngine.FPatch.Files[iCount].Comment;
+        if pEngine.FPatch.Files[iCount].Comment = '' then
           strComment := ExtractFilename(strFile);
 
         // try applying the patch
         fFirst := true;
         fMatch := false;
-        while (iHunk < pEngine.FPatch.FHunkCount) and (pEngine.FPatch.FHunks[iHunk].FileIndex = iCount) do
+        while (iHunk < length(pEngine.FPatch.Hunks)) and (pEngine.FPatch.Hunks[iHunk].FileIndex = iCount) do
         begin
-          with pEngine.FPatch.FHunks[iHunk] do
+          with pEngine.FPatch.Hunks[iHunk] do
           begin
             pFile.Position := Offset;
             pFile.ReadBuffer(cByte, 1);
-            if cByte <> LookupOrigValue(pEngine.FPatch.FHunks[iHunk], AUndo) then
+            if cByte <> LookupOrigValue(pEngine.FPatch.Hunks[iHunk], AUndo) then
             begin
               if fFirst then
               begin
@@ -264,51 +263,15 @@ begin
       end;
 
       if fAllNil then
-        exit;
-        
+        raise EPatchApplied.Create('Patch has already been applied.');
+
       // ok, it checked out, so lets patch!
       iLastHunk := 0;
-      
+
       try
-        iLastFile := -1;
-        for iHunk := 0 to pEngine.FPatch.FHunkCount - 1 do
-        begin
-          iLastHunk := iHunk;
-          with pEngine.FPatch.FHunks[iHunk] do
-          begin
-            if FileIndex <> iLastFile then
-            begin
-              inc(iLastFile);
-              pFile := pFiles[iLastFile];
-            end;
-            if not Assigned(pFile) then
-              continue;
-
-            pFile.Position := Offset;
-            cByte := LookupNewValue(pEngine.FPatch.FHunks[iHunk], AUndo);
-            pFile.WriteBuffer(cByte, 1);
-          end;
-        end;
+        pEngine.PatchEngine(pFiles, AUndo, @iLastHunk);
       except
-        iLastFile := -1;
-        for iHunk := 0 to iLastHunk do
-        begin
-          with pEngine.FPatch.FHunks[iHunk] do
-          begin
-            if FileIndex <> iLastFile then
-            begin
-              inc(iLastFile);
-              pFile := pFiles[iLastFile];
-            end;
-            if not Assigned(pFile) then
-              continue;
-
-            pFile.Position := Offset;
-            cByte := LookupOrigValue(pEngine.FPatch.FHunks[iHunk], AUndo);
-            pFile.WriteBuffer(cByte, 1);
-          end;
-        end;
-
+        pEngine.PatchEngine(pFiles, not AUndo, nil, iLastHunk);
         raise;
       end;
 
@@ -327,8 +290,6 @@ begin
   except
     raise;
   end;
-  if fAllNil then
-    raise EPatchApplied.Create('Patch has already been applied.'); 
 end;
 
 class procedure TDummy.btnClick(Sender: PObj);
