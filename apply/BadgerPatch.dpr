@@ -9,15 +9,16 @@ uses
   Classes,
   FileCtrl2,
   SysUtils,
-  PatchEngine;
-  
+  PatchEngine, Common;
+
 type
-  EPatchApplied = class(Exception);
   TDummy = class
     class procedure btnClick(Sender: PObj);
     class procedure frmResize(Sender: PObj);
     class procedure OnShow(Sender: PObj);
+    class procedure OnCantFildFile(const AFile: string; out ADirectory: string; out AContinue: boolean);
   end;
+  
 const
   CR = #13;
   LF = #10;
@@ -30,11 +31,10 @@ var
   btnPatch: PControl;
   cbxUndo: PControl;
   pBadgerImage: PImageList;
-  pEngine: TPatchEngine;
+  pPatch: TPatch;
 
   FLocation: string;
   FCompressedSize: integer;
-  FCompressed: TObject;
 
 procedure MessageB(const A: string; const B: integer);
 begin
@@ -44,13 +44,14 @@ begin
     MessageBox(0, PAnsiChar(A), 'BadgerPatch', MB_OK + B);
 end;
 
-function LoadData(Sender: TObject): boolean;
+function LoadData(): boolean;
 var
   strFilename: string;
   cMagic: array[1..5] of char;
   iLen: integer;
   strData: string;
   pFile: TFileStream;
+  pTemp: TStringStream;
 begin
   Result := false;
   FLocation := IncludeTrailingPathDelimiter(ExtractFileDir(ParamStr(0)));
@@ -79,9 +80,14 @@ begin
         ReadBuffer(iLen, sizeof(iLen));
         FCompressedSize := iLen;
         iLen := Size - Position - 9;
-        FCompressed := TStringStream.Create('');
-        (FCompressed as TStream).CopyFrom(pFile, iLen);
-        (FCompressed as TStream).Position := 0;
+        pTemp := TStringStream.Create('');
+        try
+          (pTemp as TStream).CopyFrom(pFile, iLen);
+          (pTemp as TStream).Position := 0;
+          pPatch.LoadOldFormat(pTemp);
+        finally
+          pTemp.Free;
+        end;
       finally
         pFile.Free;
       end;
@@ -95,231 +101,53 @@ begin
   Result := true;
 end;
 
-procedure Cleanup(Sender: TObject);
+procedure Cleanup();
 begin
-  if Assigned(FCompressed) then
-    FCompressed.Free;
-end;
 
-function Patch(const AUndo: boolean; var AStartDirectory: string): string;
-function IsFilename(const AData: string): boolean;
-begin
-  Result := Copy(ADAta, 9, 1) <> ':';
-end;
-function IsValidFilename(const AData: string): boolean;
-begin                                  
-  Result := Pos('../', AData) = 0;
-end;
-function LookupOrigValue(const AHunk: THunk; const AUndo: boolean): char;
-begin
-  if AUndo then
-    Result := AHunk.NewValue
-  else
-    Result := AHunk.OldValue;
-end;
-function LookupNewValue(const AHunk: THunk; const AUndo: boolean): char;
-begin
-  if not AUndo then
-    Result := AHunk.NewValue
-  else
-    Result := AHunk.OldValue;
-end;
-
-function CountString(const AData: string; const AWhat: char): integer;
-var
-  iCount: integer;
-begin
-  Result := 0;
-  for iCount := 0 to length(AData) - 1 do
-    if AData[iCount] = AWhat then
-      inc(Result);
-end;
-var
-  strDirectory: string;
-  pFiles: TList;
-  iFound: integer;
-  iCount: integer;
-  pFile: TFileStream;
-  cByte: char;
-  fFirst: boolean;
-  fMatch: boolean;
-  fAllFileMatch: boolean;
-  fAllNil: boolean;
-  strFile: string;
-  iHunk: integer;
-  strComment: string;
-  iCount2: integer;
-  iLastHunk: integer;
-begin
-  Result := '';
-  strFile := '';
-  fAllNil := true;
-  iHunk := 0;
-  pFile := nil;
-  fMatch := false;
-  fAllFileMatch := false;
-
-  strDirectory := AStartDirectory;
-  try
-    pFiles := TList.Create;
-    try
-      for iCount := 0 to length(pEngine.FPatch.Files) - 1 do
-      begin
-        //if its not the same file as last time, different hunk
-        if pEngine.FPatch.Files[iCount].Filename <> strFile then
-        begin
-          strFile := pEngine.FPatch.Files[iCount].Filename;
-          if not FileExists(strDirectory + strFile) then
-            if iCount = 0 then
-            begin
-              if not SelectDirectory(pForm.Handle, 'Select directory that contains: ' + ExtractFileName(strFile), '', strDirectory) then
-                raise Exception.Create('Unable to locate file to patch!');
-              strDirectory := IncludeTrailingPathDelimiter(strDirectory);
-              if not FileExists(strDirectory + ExtractFilename(strFile)) then
-                raise Exception.Create('Unable to locate file to patch!');
-              iFound := CountString(strFile, '\') - 1;
-              while iFound > 0 do
-              begin
-                strDirectory := strDirectory + '..\';
-                dec(iFound);
-              end;
-            end
-            else
-              raise Exception.Create('File missing!');
-
-          if fMatch and fAllFileMatch then
-          begin
-            pFile := pFiles[pFiles.Count - 1];
-            for iCount2 := 0 to pFiles.Count -  1do
-              if pFiles[iCount2] = pFile then
-                pFiles[iCount2] := nil;
-
-            pFile.Free;
-          end;
-          fAllFileMatch := true;
-
-          pFile := TFileStream.Create(strDirectory + strFile, fmOpenReadWrite or fmShareExclusive);
-          try
-            pFiles.Add(pFile);
-          except
-            pFile.Free;
-            raise;
-          end;
-
-        end
-        else // same file
-          pFiles.Add(pFile);
-
-        strComment := pEngine.FPatch.Files[iCount].Comment;
-        if pEngine.FPatch.Files[iCount].Comment = '' then
-          strComment := ExtractFilename(strFile);
-
-        // try applying the patch
-        fFirst := true;
-        fMatch := false;
-        while (iHunk < length(pEngine.FPatch.Hunks)) and (pEngine.FPatch.Hunks[iHunk].FileIndex = iCount) do
-        begin
-          with pEngine.FPatch.Hunks[iHunk] do
-          begin
-            pFile.Position := Offset;
-            pFile.ReadBuffer(cByte, 1);
-            if cByte <> LookupOrigValue(pEngine.FPatch.Hunks[iHunk], AUndo) then
-            begin
-              if fFirst then
-              begin
-                fMatch := true;
-
-                if Result = '' then
-                  Result := strComment
-                else
-                  Result := Result + ', ' + strComment;
-              end
-              else
-              begin
-                if not fMatch then
-                  raise Exception.Create('File does not match patch!');
-              end;
-            end
-            else if fMatch then
-              raise Exception.Create('File does not match patch!');
-          end;
-          inc(iHunk);
-          fFirst := false;
-        end;
-        if not fMatch then
-        begin
-          fAllNil := false;
-          fAllFileMatch := false;
-        end;
-      end;
-
-      if fMatch and fAllFileMatch then
-      begin
-        for iCount2 := 0 to pFiles.Count -  1do
-          if pFiles[iCount2] = pFile then
-            pFiles[iCount2] := nil;
-
-        pFile.Free;
-      end;
-
-      if fAllNil then
-        raise EPatchApplied.Create('Patch has already been applied.');
-
-      // ok, it checked out, so lets patch!
-      iLastHunk := 0;
-
-      try
-        pEngine.PatchEngine(pFiles, AUndo, @iLastHunk);
-      except
-        pEngine.PatchEngine(pFiles, not AUndo, nil, iLastHunk);
-        raise;
-      end;
-
-      AStartDirectory := strDirectory;
-    finally
-      pFile := nil;
-      while pFiles.Count > 0 do
-      begin
-        if Assigned(pFiles[0]) and (pFiles[0] <> pFile) then
-          TFileStream(pFiles[0]).Free;
-        pFile := pFiles[0];
-        pFiles.Delete(0);
-      end;
-      pFiles.Free;
-    end;
-  except
-    raise;
-  end;
 end;
 
 class procedure TDummy.btnClick(Sender: PObj);
 var
   strExtra: string;
+  pEngine: TPatchEngine;
 begin
-  if not Assigned(pEngine) then
-    pEngine := TPatchEngine.Create(FCompressed as TStream);
-
+  pEngine := TPatchEngine.Create(pPatch);
   try
-    strExtra := Patch(cbxUndo.Checked, FLocation);
-  except
-    on E: EPatchApplied do
-    begin
-      if cbxUndo.Checked then
-        MessageB('Patch has not been applied.', MB_ICONWARNING)
-      else
-        MessageB(E.Message, MB_ICONINFORMATION);
-      exit;
+    pEngine.OnCantLocateFile := TDummy.OnCantFildFile;
+
+    try
+      strExtra := pEngine.Patch(FLocation, cbxUndo.Checked);
+    except
+      on E: ECancelled do
+        exit;
+
+      on E: EPatchApplied do
+      begin
+        FLocation := IncludeTrailingPathDelimiter(ExtractFileDir(ParamStr(0)));
+        if cbxUndo.Checked then
+          MessageB('Patch has not been applied.', MB_ICONWARNING)
+        else
+          MessageB(E.Message, MB_ICONINFORMATION);
+        exit;
+      end;
+      on E: Exception do
+      begin
+        FLocation := IncludeTrailingPathDelimiter(ExtractFileDir(ParamStr(0)));
+        MessageB(E.Message, MB_ICONWARNING);
+        exit;
+      end;
     end;
-    on E: Exception do
-    begin
-      FLocation := IncludeTrailingPathDelimiter(ExtractFileDir(ParamStr(0)));
-      MessageB(E.Message, MB_ICONWARNING);
-      exit;
-    end;
+    if strExtra <> '' then
+      strExtra := CRLF + CRLF + 'Following files were already patched:' + CRLF + strExtra;
+    MessageB('Patch complete!' + strExtra, MB_ICONINFORMATION);
+  finally
+    pEngine.Free;
   end;
-  if strExtra <> '' then
-    strExtra := CRLF + CRLF + 'Following files were already patched:' + CRLF + strExtra;
-  MessageB('Patch complete!' + strExtra, MB_ICONINFORMATION);
+end;
+
+class procedure TDummy.OnCantFildFile(const AFile: string; out ADirectory: string; out AContinue: boolean);
+begin
+  AContinue := SelectDirectory(pForm.Handle, 'Select directory that contains: ' + ExtractFileName(AFile), '', ADirectory);
 end;
 
 procedure SetAlignments(const AFirst: boolean = false);
@@ -423,11 +251,18 @@ begin
     MinWidth := Width;
     MinHeight := Height;
   end;
-  if not LoadData(nil) then
-    exit;
 
-  Run(pForm);
-  Cleanup(nil);
+  pPatch := TPatch.Create;
+  try
+    if not LoadData() then
+      exit;
+
+    Run(pForm);
+  finally
+    pPatch.Free;
+  end;
+
+  Cleanup();
   if pBitmap <> 0 then
     DeleteObject(pBitmap);
 end.
