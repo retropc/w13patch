@@ -3,7 +3,7 @@ unit FormatVersion;
 interface
 
 const
-  FORMAT_VERSION = 3;
+  FORMAT_VERSION = 1;
   
 implementation
 

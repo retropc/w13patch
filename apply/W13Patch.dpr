@@ -1,6 +1,6 @@
-program BadgerPatch;
+program W13Patch;
 
-{$R 'badger.res' 'badger.rc'}
+{$R 'w13.res' 'w13.rc'}
 
 uses
   Kol,
@@ -9,7 +9,8 @@ uses
   Classes,
   FileCtrl2,
   SysUtils,
-  PatchEngine, Common;
+  PatchEngine,
+  Common;
 
 type
   TDummy = class
@@ -26,22 +27,19 @@ const
 
 var
   pForm: PControl;
-  pnlBadger: PControl;
   memText: PControl;
   btnPatch: PControl;
   cbxUndo: PControl;
-  pBadgerImage: PImageList;
   pPatch: TPatch;
 
   FLocation: string;
-  FCompressedSize: integer;
 
 procedure MessageB(const A: string; const B: integer);
 begin
   if Assigned(pForm) then
-    MessageBox(pForm.Handle, PAnsiChar(A), 'BadgerPatch', MB_OK + B)
+    MessageBox(pForm.Handle, PAnsiChar(A), 'W13Patch', MB_OK + B)
   else
-    MessageBox(0, PAnsiChar(A), 'BadgerPatch', MB_OK + B);
+    MessageBox(0, PAnsiChar(A), 'W13Patch', MB_OK + B);
 end;
 
 function LoadData(): boolean;
@@ -51,7 +49,6 @@ var
   iLen: integer;
   strData: string;
   pFile: TFileStream;
-  pTemp: TStringStream;
 begin
   Result := false;
   FLocation := IncludeTrailingPathDelimiter(ExtractFileDir(ParamStr(0)));
@@ -65,8 +62,8 @@ begin
       try
         Position := Size - 9;
         ReadBuffer(cMagic, sizeof(cMagic));
-        if cMagic <> 'BDGR' + chr(FORMAT_VERSION) then
-          raise Exception.Create('Not a BadgerPatch.');
+        if cMagic <> 'W13P' + chr(FORMAT_VERSION) then
+          raise Exception.Create('Not a valid W13Patch.');
         ReadBuffer(iLen, sizeof(iLen));
         Position := Size - iLen - 4;
         ReadBuffer(iLen, sizeof(iLen));
@@ -77,17 +74,8 @@ begin
         setlength(strData, iLen);
         ReadBuffer(strData[1], iLen);
         memText.Text := strData;
-        ReadBuffer(iLen, sizeof(iLen));
-        FCompressedSize := iLen;
-        iLen := Size - Position - 9;
-        pTemp := TStringStream.Create('');
-        try
-          (pTemp as TStream).CopyFrom(pFile, iLen);
-          (pTemp as TStream).Position := 0;
-          pPatch.LoadFormat(pTemp);
-        finally
-          pTemp.Free;
-        end;
+
+        pPatch.LoadFormat(pFile);
       finally
         pFile.Free;
       end;
@@ -154,18 +142,18 @@ procedure SetAlignments(const AFirst: boolean = false);
 const
   GAP = 6;
 begin
-  memText.Left := pnlBadger.Width + GAP;
+  memText.Left := 0;
   if AFirst then
   begin
-    pForm.ClientHeight := pnlBadger.Height + 4;
+    pForm.ClientHeight := 200;
     pForm.Width := 600;
   end;
-  memText.Height := pForm.ClientHeight - btnPatch.Height - 8;
-  memText.Width := pForm.ClientWidth - pnlBadger.Width - GAP - 2;
-  cbxUndo.Top := memText.Height + 5;
-  cbxUndo.Left := memText.Left;
-  btnPatch.Left := pForm.ClientWidth - btnPatch.Width - 2;
-  btnPatch.Top := cbxUndo.Top + 1;
+  memText.Height := pForm.ClientHeight - btnPatch.Height - GAP;
+  memText.Width := pForm.ClientWidth;
+  cbxUndo.Top := memText.Height + GAP + (btnPatch.Height - cbxUndo.Height) div 2 - 1;
+  cbxUndo.Left := memText.Left + 1;
+  btnPatch.Left := pForm.ClientWidth - btnPatch.Width;
+  btnPatch.Top := memText.Height + GAP;
   cbxUndo.Invalidate;
   btnPatch.Invalidate;
 end;
@@ -181,40 +169,19 @@ begin
   SetAlignments;
 end;
 
-var
-  pBitmap: Cardinal;
-
 class procedure TDummy.OnShow(Sender: PObj);
 begin
   btnPatch.DefaultBtn := true;
 end;
 
 begin
-  pForm := NewForm(nil, ' - BadgerPatch');
+  pForm := NewForm(nil, ' - W13Patch');
   with pForm^ do
   begin
     OnResize := TDummy.frmResize;
     OnShow := TDummy.OnShow;
     Tabulate;
     SupportMnemonics;
-  end;
-
-  pBitmap := LoadBitmap(hInstance, 'badger');
-  pBadgerImage := NewImageList(pForm);
-  if pBitmap <> 0 then
-    with pBadgerImage^ do
-    begin
-      imgWidth := 214;
-      ImgHeight := 152;
-      Colors := ilcColor24;
-      Add(pBitmap, 0);
-    end;
-
-  pnlBadger := NewImageShow(pForm, pBadgerImage, 0);
-  with pnlBadger^ do
-  begin
-    Width := 214;
-    Height := 152;
   end;
 
   memText := NewEditbox(pForm, [eoMultiline, eoReadOnly, eoNoHScroll]);
@@ -263,6 +230,4 @@ begin
   end;
 
   Cleanup();
-  if pBitmap <> 0 then
-    DeleteObject(pBitmap);
 end.

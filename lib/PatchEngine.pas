@@ -23,9 +23,11 @@ type
     Files: array of THunkFile;
     Hunks: array of THunk;
   public
+{$IFNDEF DontLoad}
     procedure LoadOldFormat(const APatchFile: TStream);
-    procedure LoadFormat(const APatchFile: TStream);
     procedure SaveToStream(const APatchFile: TStream);
+{$ENDIF}
+    procedure LoadFormat(const APatchFile: TStream);
   end;
 
   TLocateEvent = procedure(const AFile: string; out ANewPath: string; out AContinue: boolean) of object;
@@ -298,6 +300,7 @@ end;
 
 { TPatch }
 
+{$IFNDEF DontLoad}
 procedure TPatch.LoadOldFormat(const APatchFile: TStream);
 function IsFilename(const AData: string): boolean;
 begin
@@ -326,99 +329,53 @@ var
 begin
   iHunkCount := 0;
   iFileCount := 0;
-  if APatchFile is TStringStream then
-  begin
-    pTokens := TTokenList.Create;
-    try
-      pTokens.Tokenise(TStringStream(APatchFile).DataString, #10);
-      setlength(Files, pTokens.Count);
-      setlength(Hunks, pTokens.Count);
-      for iCount := 0 to pTokens.Count - 1 do
-      begin
-        strLine := pTokens[iCount];
-        if IsFilename(strLine) then
-        begin
-          with Files[iFileCount] do
-          begin
-            iSep := Pos('/', strLine);
-            if iSep = 0 then
-            begin
-              Filename := strLine;
-              Comment := '';
-            end
-            else
-            begin
-              Filename := Copy(strLine, 0, iSep - 1);
-              Comment := Copy(strLine, iSep + 1, length(strLine));
-            end;
-            if Filename[1] = '\' then
-              Filename := Copy(Filename, 1, length(Filename));
-            if not IsValidFilename(Filename) then
-              raise Exception.Create('Patch contains invalid filenames!');
-          end;
-          inc(iFileCount);
-        end
-        else
-        begin
-          with Hunks[iHunkCount] do
-          begin
-            FileIndex := iFileCount - 1;
-            Offset := StrToInt('$' + Copy(strLine, 0, 8));
-            OldValue := chr(StrToInt('$' + Copy(strLine, 11, 2)));
-            NewValue := chr(StrToInt('$' + Copy(strLine, 14, 2)));
-          end;
-          inc(iHunkCount);   
-        end;
-      end;
-      setlength(Files, iFileCount);
-      setlength(Hunks, iHunkCount);
-    finally
-      pTokens.Free;
-    end;
-  end
-  else
-    raise Exception.Create('Unknown patch format.');
-end;
 
-procedure TPatch.LoadFormat(const APatchFile: TStream);
-var
-  iLength: integer;
-  iFile: integer;
-  iHunk: integer;
-  iHunkCount: integer;
-  iCount: integer;
-begin
-  iHunk := 0;
-
-  with APatchFile do
-  begin
-    ReadBuffer(iLength, sizeof(integer));
-    setlength(Files, iLength);
-    ReadBuffer(iLength, sizeof(integer));
-    setlength(Hunks, iLength);
-    for iFile := 0 to length(Files) - 1 do
+  pTokens := TTokenList.Create;
+  try
+    pTokens.Tokenise(TStringStream(APatchFile).DataString, #10);
+    setlength(Files, pTokens.Count);
+    setlength(Hunks, pTokens.Count);
+    for iCount := 0 to pTokens.Count - 1 do
     begin
-      ReadBuffer(iLength, sizeof(iLength));
-      setlength(Files[iFile].Filename, iLength);
-      ReadBuffer(Files[iFile].Filename[1], iLength);
-
-      ReadBuffer(iLength, sizeof(iLength));
-      setlength(Files[iFile].Comment, iLength);
-      ReadBuffer(Files[iFile].Comment[1], iLength);
-
-      ReadBuffer(iHunkCount, sizeof(iHunkCount));
-      for iCount := 1 to iHunkCount do
+      strLine := pTokens[iCount];
+      if IsFilename(strLine) then
       begin
-        with Hunks[iHunk] do
+        with Files[iFileCount] do
         begin
-          ReadBuffer(Offset, sizeof(Offset));
-          ReadBuffer(OldValue, sizeof(OldValue));
-          ReadBuffer(NewValue, sizeof(NewValue));
-          FileIndex := iFile;
+          iSep := Pos('/', strLine);
+          if iSep = 0 then
+          begin
+            Filename := strLine;
+            Comment := '';
+          end
+          else
+          begin
+            Filename := Copy(strLine, 0, iSep - 1);
+            Comment := Copy(strLine, iSep + 1, length(strLine));
+          end;
+          if Filename[1] = '\' then
+            Filename := Copy(Filename, 1, length(Filename));
+          if not IsValidFilename(Filename) then
+            raise Exception.Create('Patch contains invalid filenames!');
         end;
-        inc(iHunk);
+        inc(iFileCount);
+      end
+      else
+      begin
+        with Hunks[iHunkCount] do
+        begin
+          FileIndex := iFileCount - 1;
+          Offset := StrToInt('$' + Copy(strLine, 0, 8));
+          OldValue := chr(StrToInt('$' + Copy(strLine, 11, 2)));
+          NewValue := chr(StrToInt('$' + Copy(strLine, 14, 2)));
+        end;
+        inc(iHunkCount);
       end;
     end;
+    setlength(Files, iFileCount);
+    setlength(Hunks, iHunkCount);
+  finally
+    pTokens.Free;
   end;
 end;
 
@@ -477,6 +434,49 @@ begin
       Position := iMarker;
       WriteBuffer(iHunkCount, sizeof(iHunkCount));
       Position := iMarker2;
+    end;
+  end;
+end;
+{$ENDIF}
+
+procedure TPatch.LoadFormat(const APatchFile: TStream);
+var
+  iLength: integer;
+  iFile: integer;
+  iHunk: integer;
+  iHunkCount: integer;
+  iCount: integer;
+begin
+  iHunk := 0;
+
+  with APatchFile do
+  begin
+    ReadBuffer(iLength, sizeof(integer));
+    setlength(Files, iLength);
+    ReadBuffer(iLength, sizeof(integer));
+    setlength(Hunks, iLength);
+    for iFile := 0 to length(Files) - 1 do
+    begin
+      ReadBuffer(iLength, sizeof(iLength));
+      setlength(Files[iFile].Filename, iLength);
+      ReadBuffer(Files[iFile].Filename[1], iLength);
+
+      ReadBuffer(iLength, sizeof(iLength));
+      setlength(Files[iFile].Comment, iLength);
+      ReadBuffer(Files[iFile].Comment[1], iLength);
+
+      ReadBuffer(iHunkCount, sizeof(iHunkCount));
+      for iCount := 1 to iHunkCount do
+      begin
+        with Hunks[iHunk] do
+        begin
+          ReadBuffer(Offset, sizeof(Offset));
+          ReadBuffer(OldValue, sizeof(OldValue));
+          ReadBuffer(NewValue, sizeof(NewValue));
+          FileIndex := iFile;
+        end;
+        inc(iHunk);
+      end;
     end;
   end;
 end;

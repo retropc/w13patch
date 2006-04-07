@@ -9,15 +9,15 @@ MAKE = $(ROOT)\bin\make.exe -$(MAKEFLAGS) -f$**
 DCC = $(ROOT)\bin\dcc32.exe $**
 BRCC = $(ROOT)\bin\brcc32.exe $**
 #------------------------------------------------------------------------------
-PROJECTS = BadgerPatch.exe CreateBadger.exe
+PROJECTS = W13Patch.exe CreatePatch.exe
 #------------------------------------------------------------------------------
 default: $(PROJECTS)
 #------------------------------------------------------------------------------
 
-CreateBadger.exe: create\CreateBadger.dpr
+CreatePatch.exe: create\CreatePatch.dpr
   $(DCC)
 
-BadgerPatch.exe: apply\BadgerPatch.dpr
+W13Patch.exe: apply\W13Patch.dpr
   $(DCC)
 
 
