@@ -1,4 +1,4 @@
-program CreateBadger;
+program CreatePatch;
 
 {$R 'Stub.res' 'Stub.rc'}
 

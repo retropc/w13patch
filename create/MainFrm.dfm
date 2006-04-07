@@ -1,16 +1,16 @@
 object MainForm: TMainForm
-  Left = 192
-  Top = 81
+  Left = 300
+  Top = 138
   BorderIcons = [biSystemMenu, biMinimize]
   BorderStyle = bsSingle
-  Caption = 'CreateBadger'
+  Caption = 'CreatePatch'
   ClientHeight = 270
   ClientWidth = 375
   Color = clBtnFace
-  Font.Charset = DEFAULT_CHARSET
+  Font.Charset = ANSI_CHARSET
   Font.Color = clWindowText
   Font.Height = -11
-  Font.Name = 'MS Sans Serif'
+  Font.Name = 'Tahoma'
   Font.Style = []
   OldCreateOrder = False
   Position = poScreenCenter
@@ -29,7 +29,7 @@ object MainForm: TMainForm
     Top = 24
     Width = 321
     Height = 21
-    EditLabel.Width = 47
+    EditLabel.Width = 48
     EditLabel.Height = 13
     EditLabel.Caption = '&Patch file:'
     TabOrder = 0
@@ -49,6 +49,7 @@ object MainForm: TMainForm
     Top = 104
     Width = 361
     Height = 129
+    ScrollBars = ssVertical
     TabOrder = 3
     OnChange = edtPatchChange
   end
@@ -57,7 +58,7 @@ object MainForm: TMainForm
     Top = 240
     Width = 75
     Height = 25
-    Caption = '&Save'
+    Caption = '&Create'
     Default = True
     Enabled = False
     TabOrder = 5
@@ -68,16 +69,16 @@ object MainForm: TMainForm
     Top = 64
     Width = 361
     Height = 21
-    EditLabel.Width = 23
+    EditLabel.Width = 24
     EditLabel.Height = 13
     EditLabel.Caption = '&Title:'
     TabOrder = 2
     OnChange = edtPatchChange
   end
   object btnLoadText: TButton
-    Left = 333
-    Top = 211
-    Width = 35
+    Left = 317
+    Top = 210
+    Width = 36
     Height = 21
     Caption = '...'
     TabOrder = 4
@@ -92,13 +93,13 @@ object MainForm: TMainForm
     DefaultExt = 'exe'
     Filter = 'Executables (*.exe)|*.exe|All files (*.*)|*.*'
     Options = [ofOverwritePrompt, ofHideReadOnly, ofPathMustExist, ofEnableSizing]
-    Left = 296
-    Top = 208
+    Left = 184
+    Top = 216
   end
   object OpenText: TOpenDialog
     Filter = 'Text files (*.txt)|*.txt|All files (*.*)|*.*'
     Options = [ofHideReadOnly, ofPathMustExist, ofFileMustExist, ofEnableSizing]
-    Left = 336
-    Top = 176
+    Left = 344
+    Top = 72
   end
 end

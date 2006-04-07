@@ -96,7 +96,7 @@ PackageDLLOutputDir=
 PackageDCPOutputDir=
 SearchPath=..\Lib
 Packages=vcl;rtl;vclx;indy;inet;xmlrtl;vclie;inetdbbde;inetdbxpress;dbrtl;dsnap;dsnapcon;vcldb;soaprtl;VclSmp;dbexpress;dbxcds;bdertl;vcldbx;webdsnap;websnap;adortl;ibxpress;teeui;teedb;tee;dss;visualclx;visualdbclx;vclactnband;vclshlctrls;Rave50CLX;Rave50VCL;dclOfficeXP;CiaPortD7;DirWatchD7;inetdb;IntrawebDB_50_70;Intraweb_50_70;VirtualTreesD7;VirtualShellToolsD7;VirtualExplorerListviewExD7;madBasic_;GR32_DSGN_D7;GR32_D7
-Conditionals=
+Conditionals=DontLoad
 DebugSourceDirs=..\Lib
 UsePackages=0
 [Parameters]
@@ -139,6 +139,9 @@ c:\program files\borland\delphi7\Projects\Bpl\DSPackDesign_D7.bpl=DSPack 2.3: Mu
 [HistoryLists\hlDebugSourcePath]
 Count=1
 Item0=..\Lib
+[HistoryLists\hlConditionals]
+Count=1
+Item0=DontLoad
 [HistoryLists\hlUnitAliases]
 Count=1
 Item0=WinTypes=Windows;WinProcs=Windows;DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE;

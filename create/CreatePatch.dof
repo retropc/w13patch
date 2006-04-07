@@ -136,14 +136,15 @@ ProductVersion=1.0.0.0
 Comments=
 [Excluded Packages]
 c:\program files\borland\delphi7\Projects\Bpl\dclusr70.bpl=Borland User Components
-c:\program files\borland\delphi7\Projects\Bpl\SudokuComponents.bpl=Sudoku components
-c:\program files\borland\delphi7\Projects\Bpl\BB2B.bpl=(untitled)
+c:\program files\borland\delphi7\Projects\Bpl\DSPackDesign_D7.bpl=DSPack 2.3: Multimedia Package for Delphi
 [HistoryLists\hlDebugSourcePath]
-Count=1
-Item0=..\Lib
+Count=2
+Item0=..\Lib\LZMA;..\Lib
+Item1=..\Lib
 [HistoryLists\hlUnitAliases]
 Count=1
 Item0=WinTypes=Windows;WinProcs=Windows;DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE;
 [HistoryLists\hlSearchPath]
-Count=1
-Item0=..\Lib
+Count=2
+Item0=..\Lib\LZMA;..\Lib
+Item1=..\Lib

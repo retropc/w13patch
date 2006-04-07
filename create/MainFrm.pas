@@ -16,8 +16,8 @@ type
     OpenDialog: TOpenDialog;
     SaveDialog: TSaveDialog;
     edtTitle: TLabeledEdit;
-    btnLoadText: TButton;
     OpenText: TOpenDialog;
+    btnLoadText: TButton;
     procedure btnBrowseClick(Sender: TObject);
     procedure edtPatchChange(Sender: TObject);
     procedure btnSaveClick(Sender: TObject);
@@ -94,13 +94,11 @@ begin
       finally
         pPatch.Free;
       end;
-      iLen := pMemStream.Size;
-      WriteBuffer(iLen, sizeof(iLen));
       CopyFrom(pMemStream, 0);
     finally
       pMemStream.Free;
     end;
-    strMagic := 'BDGR' + chr(FORMAT_VERSION);
+    strMagic := 'W13P' + chr(FORMAT_VERSION);
     WriteBuffer(strMagic[1], length(strMagic));
   end;
 end;
